@@ -1,248 +1,417 @@
-/* responsive.css - ملف واحد للتحكم في كل أحجام الشاشات */
+/* responsive.css
+   نسخة أنظف لضبط الموقع على الجوال / التابلت / الشاشات الكبيرة
+*/
 
-/* للأجهزة الصغيرة (موبايل) */
-@media (max-width: 768px) {
-  /* ===== تنسيق النافبار للجوال - نسخة مبسطة ===== */
-  nav {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    padding: 8px 12px !important;
-    min-height: 60px !important;
-    background: white !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
-    position: relative !important;
-    z-index: 1000 !important;
-    gap: 5px !important;
+/* =========================
+   Large desktop tuning
+========================= */
+@media (min-width: 1280px) {
+  .section-container {
+    max-width: 1180px !important;
   }
-  
-  /* ===== زر القائمة (☰) - ثابت في اليمين ===== */
+}
+
+/* =========================
+   Tablet + small desktop
+========================= */
+@media (max-width: 1024px) {
+  .section-container {
+    padding: 20px 16px 28px !important;
+  }
+
+  h1 {
+    font-size: 2.15rem !important;
+  }
+
+  h2 {
+    font-size: 1.75rem !important;
+  }
+
+  .card {
+    border-radius: 22px !important;
+  }
+
+  .section-container [style*="grid-template-columns"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 16px !important;
+  }
+}
+
+/* =========================
+   Tablet only
+========================= */
+@media (min-width: 768px) and (max-width: 1024px) {
+  nav {
+    padding: 12px 16px !important;
+    gap: 12px !important;
+    flex-wrap: wrap !important;
+  }
+
   .menu-toggle {
-    background: none !important;
-    border: none !important;
-    font-size: 2rem !important;
-    color: var(--primary-dark) !important;
-    width: 40px !important;
-    height: 40px !important;
-    padding: 0 !important;
-    margin: 0 !important;
+    display: none !important;
+  }
+
+  .logo-container {
+    gap: 10px !important;
+  }
+
+  .logo-icon {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .logo-text {
+    font-size: 1rem !important;
+    max-width: 220px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .logo-text span {
+    font-size: 0.74rem !important;
+  }
+
+  .nav-links {
     display: flex !important;
+    flex: 1 1 100% !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 10px !important;
+    margin: 6px 0 0 !important;
+  }
+
+  .nav-links a {
+    padding: 8px 10px !important;
+    font-size: 0.95rem !important;
+  }
+
+  .admin-login {
+    flex-shrink: 0 !important;
+  }
+
+  .admin-login a {
+    display: inline-flex !important;
+  }
+
+  .admin-login a > div {
+    width: auto !important;
+    min-width: 44px !important;
+    height: 42px !important;
+    border-radius: 999px !important;
+    padding: 0 14px !important;
+  }
+
+  .hero-section {
+    min-height: 58vh !important;
+    padding: 42px 18px !important;
+  }
+
+  .hero-content p,
+  .hero-section p {
+    font-size: 1rem !important;
+  }
+}
+
+/* =========================
+   Mobile
+========================= */
+@media (max-width: 767.98px) {
+  body {
+    overflow-x: hidden !important;
+  }
+
+  main {
+    padding: 14px 10px 24px !important;
+  }
+
+  nav {
+    display: grid !important;
+    grid-template-columns: 42px 1fr 42px !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 10px 10px !important;
+    min-height: 64px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1200 !important;
+  }
+
+  .menu-toggle {
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
-    flex-shrink: 0 !important;
-    order: 1 !important;
+    width: 42px !important;
+    height: 42px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 50% !important;
+    background: rgba(255, 255, 255, 0.16) !important;
+    color: white !important;
+    font-size: 1.5rem !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+    justify-self: end !important;
+    min-width: 42px !important;
   }
-  
-  /* ===== الشعار والاسم في الوسط ===== */
+
   .logo-container {
     display: flex !important;
     align-items: center !important;
-    gap: 6px !important;
     justify-content: center !important;
-    flex: 1 !important;
+    gap: 8px !important;
     min-width: 0 !important;
-    order: 2 !important;
+    width: 100% !important;
   }
-  
+
   .logo-icon {
-    width: 35px !important;
-    height: 35px !important;
+    width: 38px !important;
+    height: 38px !important;
     flex-shrink: 0 !important;
   }
-  
+
   .logo-text {
-    font-size: 0.85rem !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
+    font-size: 0.9rem !important;
+    line-height: 1.1 !important;
+    max-width: 150px !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 100px !important;
+    white-space: nowrap !important;
+    text-align: center !important;
   }
-  
+
   .logo-text span {
-    font-size: 0.65rem !important;
     display: block !important;
+    font-size: 0.66rem !important;
+    margin-top: 2px !important;
+    opacity: 0.9 !important;
   }
-  
-  /* ===== زر الدخول للإدارة - ثابت في اليسار ===== */
+
   .admin-login {
-    order: 3 !important;
-    flex-shrink: 0 !important;
-    width: 40px !important;
-    height: 40px !important;
+    width: 42px !important;
+    height: 42px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    justify-self: start !important;
+    overflow: hidden !important;
+    min-width: 42px !important;
   }
-  
+
   .admin-login a {
+    width: 42px !important;
+    height: 42px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    width: 100% !important;
-    height: 100% !important;
   }
-  
-  .admin-login a div {
-    width: 35px !important;
-    height: 35px !important;
-    min-width: 35px !important;
+
+  .admin-login a > div {
+    width: 42px !important;
+    min-width: 42px !important;
+    height: 42px !important;
     border-radius: 50% !important;
     padding: 0 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important;
+    gap: 0 !important;
+    overflow: hidden !important;
   }
-  
-  .admin-login a div span:last-child {
+
+  .admin-login .admin-login-label {
     display: none !important;
   }
-  
-  .admin-login a div span:first-child {
-    font-size: 1.3rem !important;
+
+  .admin-login a > div span:first-child {
     margin: 0 !important;
+    font-size: 1.15rem !important;
     line-height: 1 !important;
   }
-  
-  /* ===== القائمة المنسدلة ===== */
+
   .nav-links {
     display: none !important;
     position: absolute !important;
-    top: 60px !important;
-    left: 0 !important;
-    right: 0 !important;
+    top: calc(100% + 8px) !important;
+    right: 10px !important;
+    left: 10px !important;
     background: white !important;
-    padding: 15px !important;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.15) !important;
-    z-index: 999 !important;
+    border-radius: 20px !important;
+    padding: 12px !important;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12) !important;
+    z-index: 1300 !important;
     flex-direction: column !important;
     gap: 8px !important;
-    border-top: 2px solid var(--primary-light) !important;
+    border: 1px solid rgba(139, 0, 0, 0.08) !important;
   }
-  
+
   .nav-links.open {
     display: flex !important;
   }
-  
+
   .nav-links a {
     width: 100% !important;
     text-align: center !important;
-    padding: 12px !important;
-    background-color: var(--gray-50) !important;
-    border-radius: 8px !important;
-    border: 1px solid var(--gray-200) !important;
-    color: var(--primary-dark) !important;
-    font-weight: 600 !important;
+    padding: 12px 14px !important;
+    border-radius: 12px !important;
+    background: #faf7f4 !important;
+    border: 1px solid rgba(139, 0, 0, 0.08) !important;
+    color: var(--primary, #8b0000) !important;
+    font-weight: 700 !important;
     text-decoration: none !important;
-    font-size: 1rem !important;
+    font-size: 0.96rem !important;
   }
-  
-  /* ===== باقي تنسيقات الصفحة ===== */
-  h1 {
-    font-size: 1.8rem !important;
-    margin-top: 10px !important;
-  }
-  
+
   .section-container {
-    padding: 15px !important;
+    padding: 14px 6px 24px !important;
   }
-  
+
+  h1 {
+    font-size: 1.7rem !important;
+    line-height: 1.35 !important;
+    margin-bottom: 10px !important;
+  }
+
+  h2 {
+    font-size: 1.4rem !important;
+    line-height: 1.4 !important;
+  }
+
+  h2::after {
+    width: 62px !important;
+    height: 3px !important;
+    bottom: -8px !important;
+  }
+
+  h3 {
+    font-size: 1.08rem !important;
+  }
+
+  p {
+    font-size: 0.95rem !important;
+  }
+
   .card {
-    padding: 15px !important;
-    margin-bottom: 15px !important;
+    padding: 16px !important;
+    border-radius: 20px !important;
+    margin-bottom: 14px !important;
   }
-  
-  /* تنسيق البطاقات في صفحة الاتصال */
-  .card h3 {
-    font-size: 1.2rem !important;
+
+  .hero-section {
+    min-height: auto !important;
+    padding: 34px 14px !important;
+    border-radius: 24px !important;
+    margin: 10px 0 16px !important;
   }
-  
-  .card p {
-    font-size: 0.9rem !important;
+
+  .hero-content p,
+  .hero-section p {
+    font-size: 0.97rem !important;
+    line-height: 1.9 !important;
   }
-  
-  .card a {
-    font-size: 1rem !important;
-    word-break: break-all !important;
-  }
-  
-  /* تنسيق الشبكات */
-  [style*="grid-template-columns"] {
+
+  .services-grid {
     grid-template-columns: 1fr !important;
-    gap: 15px !important;
+    gap: 14px !important;
+    margin-top: 18px !important;
   }
-  
-  /* تنسيق الأزرار */
-  button {
-    padding: 12px 20px !important;
-    font-size: 1rem !important;
-    width: 100% !important;
-    margin: 5px 0 !important;
+
+  .section-container [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  .section-container [style*="display: grid"] {
+    gap: 14px !important;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  textarea {
+    min-height: 110px !important;
+  }
+
+  iframe {
+    min-height: 220px !important;
+  }
+
+  table {
+    min-width: 620px !important;
+  }
+
+  .section-container [style*="font-family: monospace"] {
+    font-size: 0.98rem !important;
   }
 }
 
-/* للأجهزة المتوسطة (تابلت) */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .menu-toggle {
-    display: none !important;
+/* =========================
+   Small mobile
+========================= */
+@media (max-width: 575.98px) {
+  nav {
+    grid-template-columns: 40px 1fr 40px !important;
+    padding: 9px 8px !important;
+    min-height: 62px !important;
+    gap: 6px !important;
   }
-  
+
+  .menu-toggle,
+  .admin-login,
+  .admin-login a,
+  .admin-login a > div {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+  }
+
+  .logo-icon {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .logo-text {
+    max-width: 120px !important;
+    font-size: 0.82rem !important;
+  }
+
+  .logo-text span {
+    font-size: 0.62rem !important;
+  }
+
+  .section-container {
+    padding: 12px 4px 22px !important;
+  }
+
+  h1 {
+    font-size: 1.5rem !important;
+  }
+
+  h2 {
+    font-size: 1.28rem !important;
+  }
+
+  .card {
+    padding: 14px !important;
+    border-radius: 18px !important;
+  }
+
+  .hero-section {
+    padding: 28px 12px !important;
+  }
+
   .nav-links {
-    display: flex !important;
-    gap: 15px !important;
+    right: 8px !important;
+    left: 8px !important;
+    padding: 10px !important;
   }
-  
-  .admin-login a div span:last-child {
-    display: inline !important;
-  }
-  
-  .admin-login a div {
-    width: auto !important;
-    height: auto !important;
-    border-radius: 30px !important;
-    padding: 8px 15px !important;
-  }
-  
-  [style*="grid-template-columns"] {
-    grid-template-columns: repeat(2, 1fr) !important;
-  }
-}
 
-/* للأجهزة الكبيرة */
-@media (min-width: 1025px) {
-  .menu-toggle {
-    display: none !important;
-  }
-  
-  .admin-login a div span:last-child {
-    display: inline !important;
-  }
-  
-  .admin-login a div {
-    width: auto !important;
-    height: auto !important;
-    border-radius: 30px !important;
-    padding: 8px 15px !important;
-  }
-}
-
-/* تنسيق خاص لصفحة الاتصال في الموبايل */
-@media (max-width: 768px) {
-  /* إلغاء أي تنسيقات سابقة للشبكات */
-  div[style*="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr))"] {
-    grid-template-columns: 1fr !important;
-  }
-  
-  /* تنسيق البطاقات */
-  div[class*="card"] {
-    margin-bottom: 15px !important;
-  }
-  
-  /* جعل الأزرار متساوية */
-  a[style*="border-radius: 50px"] {
-    width: 100% !important;
-    margin: 5px 0 !important;
-    justify-content: center !important;
+  .nav-links a {
+    padding: 11px 12px !important;
+    font-size: 0.93rem !important;
   }
 }

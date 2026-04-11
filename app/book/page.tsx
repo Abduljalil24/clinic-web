@@ -3,623 +3,776 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
+const PRIMARY = "#8B0000";
+const SECONDARY = "#C04040";
+
+type ServiceRow = {
+  id: string;
+  name?: string | null;
+  created_at?: string | null;
+};
+
+type BookingResult = {
+  booking_number: string | null;
+  appointment_date: string;
+};
+
+type MessageType = "success" | "error" | "info";
+
 export default function BookPage() {
   const today = useMemo(() => {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
+    const now = new Date();
+    return formatDate(now);
   }, []);
 
-  const [date, setDate] = useState(today);
-  const [slots, setSlots] = useState<string[]>([]);
-  const [selectedTime, setSelectedTime] = useState<string>("");
   const [patientName, setPatientName] = useState("");
   const [patientPhone, setPatientPhone] = useState("");
-  const [loadingSlots, setLoadingSlots] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ text: string; type: "success" | "error" | "info" } | null>(null);
-  const [bookingComplete, setBookingComplete] = useState(false);
-  const [bookingDetails, setBookingDetails] = useState<any>(null);
 
-  const loadSlots = async (d: string) => {
-      setLoadingSlots(true);
-      setSelectedTime("");
-      setMsg(null);
+  const [services, setServices] = useState<ServiceRow[]>([]);
+  const [selectedServiceId, setSelectedServiceId] = useState("");
 
-      try {
-          const selectedDate = new Date(d);
-          const dayNumber = selectedDate.getDay();
-          const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-          const dayName = dayNames[dayNumber];
-          
-          console.log("1. التاريخ:", d);
-          console.log("2. اليوم:", dayName);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [selectedTime, setSelectedTime] = useState("");
 
-          // 1. جلب ساعات العمل من قاعدة البيانات
-          const { data: workData, error: workError } = await supabase
-              .from('working_hours')
-              .select('*')
-              .eq('day', dayName);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingServices, setIsLoadingServices] = useState(true);
+  const [isLoadingTimes, setIsLoadingTimes] = useState(false);
 
-          if (workError) {
-              console.error("خطأ في جلب ساعات العمل:", workError);
-              setSlots([]);
-              return;
-          }
+  const [msg, setMsg] = useState<{ text: string; type: MessageType } | null>(
+    null
+  );
 
-          if (!workData || workData.length === 0) {
-              console.log("لا يوجد دوام لهذا اليوم");
-              setSlots([]);
-              return;
-          }
-
-          const work = workData[0];
-          console.log("3. ساعات العمل:", work);
-
-          // 2. جلب أوقات الاستراحة
-          const { data: breaksData } = await supabase
-              .from('breaks')
-              .select('*')
-              .eq('day', dayName);
-
-          console.log("4. أوقات الاستراحة:", breaksData);
-
-          // 3. جلب المواعيد المحجوزة من المرضى
-          const { data: bookedData } = await supabase
-              .from('appointments')
-              .select('appointment_time')
-              .eq('appointment_date', d)
-              .neq('status', 'cancelled');
-
-          const bookedTimes = (bookedData || []).map(b => 
-            b.appointment_time.substring(0,5)
-          );
-          console.log("5. المواعيد المحجوزة من المرضى:", bookedTimes);
-
-          // ✅ 4. جلب الأوقات المحجوزة يدوياً من الادمن (الجديد)
-          const { data: blockedData } = await supabase
-              .from('blocked_times')
-              .select('*')
-              .eq('date', d);
-
-          console.log("6. الأوقات المحجوزة يدوياً من الادمن:", blockedData);
-
-          // 5. توليد المواعيد كل 15 دقيقة
-          const startTime = work.start_time;
-          const endTime = work.end_time;
-          
-          console.log("7. وقت البداية:", startTime);
-          console.log("8. وقت النهاية:", endTime);
-          
-          const [startHour, startMin] = startTime.split(':').map(Number);
-          const [endHour, endMin] = endTime.split(':').map(Number);
-          
-          const startTotal = startHour * 60 + (startMin || 0);
-          const endTotal = endHour * 60 + (endMin || 0);
-          
-          console.log("9. بداية بالدقائق:", startTotal);
-          console.log("10. نهاية بالدقائق:", endTotal);
-          
-          const availableSlots = [];
-          
-          for (let minutes = startTotal; minutes < endTotal; minutes += 15) {
-              const hour = Math.floor(minutes / 60);
-              const minute = minutes % 60;
-              const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-              
-              // تحقق من وقت الاستراحة
-              let isBreak = false;
-              if (breaksData && breaksData.length > 0) {
-                  for (const b of breaksData) {
-                      // معالجة مشكلة end_TIME في جدول breaks
-                      const breakEnd = b.end_TIME || b.end_time;
-                      if (timeStr >= b.start_time && timeStr < breakEnd) {
-                          isBreak = true;
-                          break;
-                      }
-                  }
-              }
-              
-              // تحقق من الحجز (هل هو في قائمة المحجوزات من المرضى؟)
-              const isBooked = bookedTimes.includes(timeStr);
-              
-              // ✅ تحقق من الأوقات المحجوزة يدوياً من الادمن
-              let isBlocked = false;
-              if (blockedData && blockedData.length > 0) {
-                  for (const block of blockedData) {
-                      if (timeStr >= block.start_time && timeStr < block.end_time) {
-                          isBlocked = true;
-                          break;
-                      }
-                  }
-              }
-              
-              console.log(`11. الوقت ${timeStr}: استراحة? ${isBreak}, محجوز? ${isBooked}, محظور? ${isBlocked}`);
-              
-              // ✅ إذا لم يكن وقت استراحة وليس محجوز وليس محظور، أضفه
-              if (!isBreak && !isBooked && !isBlocked) {
-                  availableSlots.push(timeStr);
-              }
-          }
-          
-          availableSlots.sort();
-          console.log("12. المواعيد المتاحة النهائية:", availableSlots);
-          setSlots(availableSlots);
-
-      } catch (error) {
-          console.error("خطأ في تحميل المواعيد:", error);
-          setSlots([]);
-      } finally {
-          setLoadingSlots(false);
-      }
-  };
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [bookingNumber, setBookingNumber] = useState("");
 
   useEffect(() => {
-    loadSlots(date);
-  }, [date]);
+    loadServices();
+  }, []);
 
-  const book = async () => {
-    setMsg(null);
-
-    if (!selectedTime) {
-        setMsg({ text: "⚠️ الرجاء اختيار وقت للحجز", type: "error" });
-        return;
+  useEffect(() => {
+    if (selectedDate) {
+      loadAvailableTimes();
+    } else {
+      setAvailableTimes([]);
+      setSelectedTime("");
     }
-    if (!patientName.trim()) {
-        setMsg({ text: "⚠️ الرجاء إدخال الاسم", type: "error" });
-        return;
-    }
-    if (!patientPhone.trim()) {
-        setMsg({ text: "⚠️ الرجاء إدخال رقم الجوال", type: "error" });
-        return;
-    }
+  }, [selectedDate]);
 
-    setSaving(true);
-
-    const now = new Date();
-    const yy = String(now.getFullYear()).slice(-2);
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-    const random = Math.floor(1000 + Math.random() * 9000);
-    const bookingNumber = `CL-${yy}${mm}${dd}-${random}`;
+  async function loadServices() {
+    setIsLoadingServices(true);
 
     try {
-        // أولاً: تحقق إذا كان الموعد لا يزال متاحاً (تأكد إضافي)
-        const { data: existingBooking } = await supabase
-            .from("appointments")
-            .select("*")
-            .eq("appointment_date", date)
-            .eq("appointment_time", selectedTime)
-            .neq("status", "cancelled");
+      const { data, error } = await supabase
+        .from("services")
+        .select("*")
+        .order("created_at", { ascending: true });
 
-        if (existingBooking && existingBooking.length > 0) {
-            setMsg({ 
-                text: "❌ هذا الوقت تم حجزه للتو، الرجاء اختيار وقت آخر", 
-                type: "error" 
-            });
-            // تحديث المواعيد فوراً
-            await loadSlots(date);
-            setSaving(false);
-            return;
-        }
+      if (error) throw error;
 
-        // ثانياً: إدخال الحجز
-        const { error } = await supabase.from("appointments").insert({
-            appointment_date: date,
-            appointment_time: selectedTime,
-            status: "confirmed",
-            patient_name: patientName.trim(),
-            patient_phone: patientPhone.trim(),
-            booking_number: bookingNumber,
-        });
-
-        if (error) {
-            if ((error as any).code === "23505") { // خطأ التكرار
-                setMsg({ 
-                    text: "❌ هذا الوقت تم حجزه للتو، الرجاء اختيار وقت آخر", 
-                    type: "error" 
-                });
-            } else {
-                setMsg({ text: `❌ تعذر الحجز: ${error.message}`, type: "error" });
-            }
-            return;
-        }
-
-        // ثالثاً: تحديث المواعيد فوراً بعد الحجز الناجح
-        await loadSlots(date);
-
-        // رابعاً: عرض رسالة النجاح
-        const verifyLink = `${window.location.origin}/verify?code=${encodeURIComponent(bookingNumber)}`;
-        
-        const bookingInfo = {
-            number: bookingNumber,
-            date,
-            time: selectedTime,
-            name: patientName.trim(),
-            phone: patientPhone.trim(),
-            verifyLink
-        };
-        
-        setBookingDetails(bookingInfo);
-        setBookingComplete(true);
-        
-        const successMessage = 
-            `✅ تم حجز الموعد بنجاح!\n\n` +
-            `📋 رقم الحجز: ${bookingNumber}\n` +
-            `📅 التاريخ: ${new Date(date).toLocaleDateString('ar-EG')}\n` +
-            `⏰ الوقت: ${selectedTime}\n` +
-            `👤 الاسم: ${patientName.trim()}\n` +
-            `📞 الجوال: ${patientPhone.trim()}`;
-
-        setMsg({ text: successMessage, type: "success" });
-
-        // خامساً: تفريغ الحقول
-        setPatientName("");
-        setPatientPhone("");
-        setSelectedTime("");
-        
-    } catch (e: any) {
-        setMsg({ text: `❌ تعذر الحجز: ${e?.message ?? "خطأ غير معروف"}`, type: "error" });
+      setServices((data ?? []) as ServiceRow[]);
+    } catch (error: any) {
+      showMessage(`تعذر تحميل الخدمات: ${error.message}`, "error");
     } finally {
-        setSaving(false);
+      setIsLoadingServices(false);
     }
-  };
+  }
 
-  const getDayName = (dateStr: string) => {
-    const days = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-    const dayIndex = new Date(dateStr).getDay();
-    return days[dayIndex];
-  };
+  function serviceLabel(row: ServiceRow) {
+    return (row.name ?? "خدمة").toString();
+  }
+
+  async function loadAvailableTimes() {
+    if (!selectedDate) return;
+
+    setIsLoadingTimes(true);
+    setAvailableTimes([]);
+    setSelectedTime("");
+
+    try {
+      const selectedDateObj = new Date(selectedDate);
+
+      const { data: workingHoursRes, error: workingHoursError } = await supabase
+        .from("working_hours")
+        .select("*");
+
+      if (workingHoursError) throw workingHoursError;
+
+      const { data: breaksRes, error: breaksError } = await supabase
+        .from("breaks")
+        .select("*");
+
+      if (breaksError) throw breaksError;
+
+      const { data: appointmentsRes, error: appointmentsError } = await supabase
+        .from("appointments")
+        .select("*")
+        .eq("appointment_date", selectedDate);
+
+      if (appointmentsError) throw appointmentsError;
+
+      const { data: blockedRes, error: blockedError } = await supabase
+        .from("blocked_times")
+        .select("*")
+        .eq("date", selectedDate);
+
+      if (blockedError) throw blockedError;
+
+      const workingHours = (workingHoursRes ?? []) as Record<string, any>[];
+      const breaks = (breaksRes ?? []) as Record<string, any>[];
+      const appointments = (appointmentsRes ?? []) as Record<string, any>[];
+      const blockedTimes = (blockedRes ?? []) as Record<string, any>[];
+
+      const matchedWorkingHours = workingHours.filter((row) =>
+        matchesDay(row.day, selectedDateObj)
+      );
+
+      if (matchedWorkingHours.length === 0) {
+        setAvailableTimes([]);
+        return;
+      }
+
+      const allSlots = new Set<string>();
+
+      for (const row of matchedWorkingHours) {
+        const start = normalizeTime(row.start_time);
+        const end = normalizeTime(row.end_time);
+
+        if (!start || !end) continue;
+
+        for (const slot of generateSlots(start, end, 15)) {
+          allSlots.add(slot);
+        }
+      }
+
+      const matchedBreaks = breaks.filter((row) =>
+        matchesDay(row.day, selectedDateObj)
+      );
+
+      const reservedTimes = new Set(
+        appointments
+          .filter((row) => {
+            const status = String(row.status ?? "").toLowerCase();
+            return status !== "cancelled" && status !== "canceled";
+          })
+          .map((row) => normalizeTime(row.appointment_time))
+          .filter(Boolean)
+      );
+
+      const blockedRanges = blockedTimes.map((row) => ({
+        start: normalizeTime(row.start_time),
+        end: normalizeTime(row.end_time),
+      }));
+
+      const filteredSlots = Array.from(allSlots)
+        .filter((slot) => {
+          if (reservedTimes.has(slot)) return false;
+
+          for (const br of matchedBreaks) {
+            const start = normalizeTime(br.start_time);
+            const end = normalizeTime(br.end_time);
+            if (!start || !end) continue;
+            if (isInRange(slot, start, end)) return false;
+          }
+
+          for (const block of blockedRanges) {
+            if (!block.start || !block.end) continue;
+            if (isInRange(slot, block.start, block.end)) return false;
+          }
+
+          return true;
+        })
+        .sort();
+
+      setAvailableTimes(filteredSlots);
+    } catch (error: any) {
+      showMessage(`تعذر تحميل الأوقات: ${error.message}`, "error");
+    } finally {
+      setIsLoadingTimes(false);
+    }
+  }
+
+  async function submitBooking() {
+    setMsg(null);
+
+    if (!patientName.trim()) {
+      showMessage("أدخل الاسم الكامل", "error");
+      return;
+    }
+
+    if (!patientPhone.trim()) {
+      showMessage("أدخل رقم الجوال", "error");
+      return;
+    }
+
+    if (patientPhone.trim().length < 6) {
+      showMessage("رقم الجوال غير صحيح", "error");
+      return;
+    }
+
+    if (!selectedServiceId) {
+      showMessage("اختر الخدمة", "error");
+      return;
+    }
+
+    if (!selectedDate) {
+      showMessage("اختر تاريخ الموعد", "error");
+      return;
+    }
+
+    if (!selectedTime) {
+      showMessage("اختر وقت الموعد", "error");
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data: existing, error: existingError } = await supabase
+        .from("appointments")
+        .select("id,status")
+        .eq("appointment_date", selectedDate)
+        .eq("appointment_time", selectedTime)
+        .maybeSingle();
+
+      if (existingError) throw existingError;
+
+      if (existing) {
+        const status = String(existing.status ?? "").toLowerCase();
+        if (status !== "cancelled" && status !== "canceled") {
+          showMessage("هذا الوقت تم حجزه للتو، اختر وقتًا آخر", "error");
+          await loadAvailableTimes();
+          return;
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("appointments")
+        .insert({
+          patient_name: patientName.trim(),
+          patient_phone: patientPhone.trim(),
+          appointment_date: selectedDate,
+          appointment_time: selectedTime,
+          status: "pending",
+          service_id: selectedServiceId,
+        })
+        .select("booking_number, appointment_date")
+        .single();
+
+      if (error) throw error;
+
+      const inserted = data as BookingResult;
+      const number = String(inserted.booking_number ?? "");
+
+      setBookingNumber(number);
+      setBookingModalOpen(true);
+
+      setPatientName("");
+      setPatientPhone("");
+      setSelectedServiceId("");
+      setSelectedDate("");
+      setSelectedTime("");
+      setAvailableTimes([]);
+      setMsg(null);
+    } catch (error: any) {
+      showMessage(`فشل الحجز: ${error.message}`, "error");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  function showMessage(text: string, type: MessageType) {
+    setMsg({ text, type });
+  }
+
+  const dateText = selectedDate
+    ? formatDisplayDate(selectedDate)
+    : "اختر التاريخ";
 
   return (
-    <div className="section-container" style={{ maxWidth: "900px" }}>
-      {/* رأس الصفحة */}
-      <div style={{ textAlign: "center", marginBottom: "40px" }}>
-        <h1 style={{ color: "var(--primary-dark)", fontSize: "2.5rem" }}>حجز موعد</h1>
-        <div style={{ 
-          width: "80px", 
-          height: "4px", 
-          background: "linear-gradient(90deg, var(--primary), var(--secondary))",
-          margin: "10px auto",
-          borderRadius: "2px"
-        }}></div>
-        <p style={{ color: "var(--gray-600)", fontSize: "1.1rem" }}>
-          احجبي موعدك بسهولة مع دكتورة سارة أحمد
+    <div className="section-container" style={{ maxWidth: "920px" }}>
+      <div style={{ textAlign: "center", marginBottom: "30px" }}>
+        <h1 style={{ marginBottom: "10px" }}>حجز موعد</h1>
+        <p
+          style={{
+            color: "var(--text-soft)",
+            fontSize: "1.02rem",
+            maxWidth: "680px",
+            margin: "0 auto",
+          }}
+        >
+          اختاري الخدمة، حددي التاريخ، ثم اختاري الوقت المناسب وأكملي بيانات
+          الحجز.
         </p>
       </div>
 
-      {/* بطاقة الطبيبة */}
-      <div className="card" style={{ 
-        marginBottom: "30px",
-        background: "linear-gradient(135deg, var(--primary), var(--primary-dark))",
-        color: "white"
-      }}>
-        <div style={{ display: "flex", gap: "20px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ 
-            width: "100px", 
-            height: "100px", 
-            borderRadius: "50%", 
-            background: "white",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "3rem"
-          }}>
-            👩‍⚕️
+      {msg && (
+        <div
+          style={{
+            marginBottom: "18px",
+            padding: "14px 16px",
+            borderRadius: "16px",
+            background:
+              msg.type === "error"
+                ? "#fee2e2"
+                : msg.type === "success"
+                ? "#dcfce7"
+                : "#e0f2fe",
+            color:
+              msg.type === "error"
+                ? "#991b1b"
+                : msg.type === "success"
+                ? "#166534"
+                : "#075985",
+            fontWeight: 700,
+          }}
+        >
+          {msg.text}
+        </div>
+      )}
+
+      {/* بيانات المريض */}
+      <SectionCard>
+        <SectionHeader title="بيانات المريض" />
+
+        <div style={{ display: "grid", gap: "16px" }}>
+          <input
+            type="text"
+            placeholder="الاسم الكامل"
+            value={patientName}
+            onChange={(e) => setPatientName(e.target.value)}
+          />
+
+          <input
+            type="tel"
+            placeholder="رقم الجوال"
+            value={patientPhone}
+            onChange={(e) => setPatientPhone(e.target.value)}
+            dir="ltr"
+          />
+        </div>
+      </SectionCard>
+
+      {/* تفاصيل الموعد */}
+      <SectionCard>
+        <SectionHeader title="تفاصيل الموعد" />
+
+        <div style={{ display: "grid", gap: "16px" }}>
+          {isLoadingServices ? (
+            <div style={{ textAlign: "center", padding: "24px" }}>
+              ⏳ جاري تحميل الخدمات...
+            </div>
+          ) : (
+            <select
+              value={selectedServiceId}
+              onChange={(e) => setSelectedServiceId(e.target.value)}
+            >
+              <option value="">اختر الخدمة</option>
+              {services.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {serviceLabel(row)}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <div style={{ display: "grid", gap: "8px" }}>
+            <input
+              type="date"
+              min={today}
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+            />
+            <div
+              style={{
+                color: "var(--text-soft)",
+                fontSize: "0.95rem",
+                paddingRight: "4px",
+              }}
+            >
+              {selectedDate
+                ? `التاريخ المختار: ${dateText}`
+                : "اختاري تاريخ الموعد"}
+            </div>
           </div>
-          <div>
-            <h2 style={{ color: "white", marginBottom: "10px" }}>د. أسياء محمد ناجي</h2>
-            <p style={{ color: "white", marginBottom: "5px" }}>استشارية نساء وتوليد</p>
-            <p style={{ color: "white", fontSize: "0.9rem" }}>
-              ⭐ خبرة 30+ سنة | 🏥 10000+ مريضة | 👶 5000+ ولادة
-            </p>
+
+          {selectedDate && (
+            <div
+              style={{
+                background: "var(--bg-soft)",
+                border: "1px solid var(--border)",
+                borderRadius: "18px",
+                padding: "14px 16px",
+                color: "var(--text-soft)",
+                fontWeight: 600,
+              }}
+            >
+              اليوم: {getDayNameArabicFromDate(selectedDate)}
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {/* الأوقات المتاحة */}
+      <SectionCard>
+        <SectionHeader title="الأوقات المتاحة" />
+
+        {isLoadingTimes ? (
+          <div style={{ textAlign: "center", padding: "26px" }}>
+            ⏳ جاري تحميل الأوقات...
           </div>
+        ) : !selectedDate ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "24px",
+              color: "var(--text-soft)",
+            }}
+          >
+            اختاري تاريخ الموعد أولًا لعرض الأوقات المتاحة
+          </div>
+        ) : availableTimes.length === 0 ? (
+          <div
+            style={{
+              padding: "18px",
+              borderRadius: "18px",
+              background: "#fff1f2",
+              border: "1px solid rgba(220,38,38,0.12)",
+              color: "#be123c",
+              textAlign: "center",
+              fontWeight: 700,
+            }}
+          >
+            لا توجد أوقات متاحة في هذا اليوم
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+              }}
+            >
+              {availableTimes.map((time) => {
+                const isSelected = selectedTime === time;
+
+                return (
+                  <button
+                    key={time}
+                    type="button"
+                    onClick={() => setSelectedTime(time)}
+                    style={{
+                      width: "auto",
+                      minWidth: "96px",
+                      background: isSelected ? PRIMARY : "white",
+                      color: isSelected ? "white" : "var(--text)",
+                      border: isSelected
+                        ? "1px solid transparent"
+                        : "1px solid var(--border)",
+                      boxShadow: "none",
+                      padding: "11px 16px",
+                    }}
+                  >
+                    {time}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div
+              style={{
+                marginTop: "16px",
+                background: "var(--bg-soft)",
+                border: "1px solid var(--border)",
+                borderRadius: "16px",
+                padding: "14px 16px",
+                color: "var(--text-soft)",
+                fontSize: "0.95rem",
+              }}
+            >
+              🟢 {availableTimes.length} موعد متاح — مدة كل موعد 15 دقيقة
+            </div>
+          </>
+        )}
+      </SectionCard>
+
+      {/* زر التأكيد */}
+      <div style={{ marginTop: "18px" }}>
+        <button
+          type="button"
+          onClick={submitBooking}
+          disabled={isLoading}
+          style={{
+            width: "100%",
+            padding: "16px",
+            fontSize: "1.08rem",
+            fontWeight: 800,
+          }}
+        >
+          {isLoading ? "⏳ جاري الحجز..." : "تأكيد الحجز"}
+        </button>
+      </div>
+
+      {/* ملاحظات */}
+      <div className="card" style={{ marginTop: "20px", textAlign: "right" }}>
+        <SectionHeader title="ملاحظات مهمة" small />
+        <div style={{ color: "var(--text-soft)", lineHeight: 2 }}>
+          • يرجى التأكد من الاسم ورقم الجوال قبل تأكيد الحجز
+          <br />
+          • اختاري خدمة وتاريخًا ووقتًا متاحًا قبل الإرسال
+          <br />
+          • بعد نجاح الحجز احتفظي برقم الحجز وقدميه عند الوصول
         </div>
       </div>
 
-      {!bookingComplete ? (
-        <>
-          {/* اختيار التاريخ */}
-          <div className="card" style={{ marginBottom: "20px" }}>
-            <h3 style={{ color: "var(--primary-dark)", marginBottom: "15px", display: "flex", alignItems: "center", gap: "10px" }}>
-              <span>📅</span> اختيار التاريخ
-            </h3>
-            <div>
-              <input
-                type="date"
-                min={today}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                style={{
-                  padding: "12px 15px",
-                  borderRadius: "12px",
-                  border: "2px solid var(--gray-200)",
-                  fontSize: "1rem",
-                  width: "100%",
-                  maxWidth: "300px",
-                  outline: "none"
-                }}
-                onFocus={(e) => e.target.style.borderColor = "var(--primary)"}
-                onBlur={(e) => e.target.style.borderColor = "var(--gray-200)"}
-              />
-              <p style={{ marginTop: "10px", color: "var(--gray-600)", fontSize: "0.9rem" }}>
-                اليوم: {getDayName(date)}
-              </p>
+      {/* مودال رقم الحجز */}
+      {bookingModalOpen && (
+        <div
+          onClick={() => setBookingModalOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.32)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            zIndex: 2000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "460px",
+              background: "#F6E8E5",
+              borderRadius: "28px",
+              padding: "24px",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.18)",
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                color: PRIMARY,
+                fontSize: "1.5rem",
+                fontWeight: 800,
+                marginBottom: "10px",
+              }}
+            >
+              تم تأكيد الحجز
             </div>
-          </div>
 
-          {/* المواعيد المتاحة */}
-          <div className="card" style={{ marginBottom: "20px" }}>
-            <h3 style={{ color: "var(--primary-dark)", marginBottom: "15px", display: "flex", alignItems: "center", gap: "10px" }}>
-              <span>⏰</span> المواعيد المتاحة
-            </h3>
+            <div
+              style={{
+                color: "#6D625E",
+                lineHeight: 1.9,
+                marginBottom: "18px",
+              }}
+            >
+              احتفظ برقم الحجز واعرضه على السكرتير عند الوصول
+            </div>
 
-            {loadingSlots ? (
-              <div style={{ textAlign: "center", padding: "30px" }}>
-                <div style={{ fontSize: "2rem", marginBottom: "10px" }}>⏳</div>
-                <p style={{ color: "var(--gray-600)" }}>جاري تحميل المواعيد...</p>
-              </div>
-            ) : slots.length === 0 ? (
-              <div style={{ 
-                textAlign: "center", 
-                padding: "40px",
-                background: "var(--gray-50)",
-                borderRadius: "12px"
-              }}>
-                <div style={{ fontSize: "3rem", marginBottom: "10px" }}>😔</div>
-                <p style={{ color: "var(--gray-600)" }}>لا توجد مواعيد متاحة لهذا اليوم</p>
-                <p style={{ fontSize: "0.9rem", color: "var(--gray-500)", marginTop: "10px" }}>
-                  الرجاء اختيار يوم آخر
-                </p>
-              </div>
-            ) : (
-              <>
-                <div style={{ 
-                  display: "flex", 
-                  flexWrap: "wrap", 
-                  gap: "10px", 
-                  marginBottom: "15px",
-                  justifyContent: "center"
-                }}>
-                  {slots.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setSelectedTime(t)}
-                      style={{
-                        padding: "12px 20px",
-                        borderRadius: "50px",
-                        border: selectedTime === t ? "none" : "2px solid var(--gray-200)",
-                        background: selectedTime === t 
-                          ? "linear-gradient(135deg, var(--primary), var(--primary-dark))"
-                          : "transparent",
-                        color: selectedTime === t ? "white" : "var(--gray-700)",
-                        cursor: "pointer",
-                        fontSize: "1rem",
-                        fontWeight: selectedTime === t ? "600" : "400",
-                        transition: "all 0.3s ease",
-                        boxShadow: selectedTime === t ? "var(--shadow-md)" : "none"
-                      }}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                
-                {/* ملخص المواعيد حسب اليوم */}
-                <div style={{
-                  marginTop: "20px",
-                  padding: "15px",
-                  background: "var(--gray-50)",
-                  borderRadius: "10px",
-                  fontSize: "0.9rem",
-                  color: "var(--gray-600)"
-                }}>
-                  <div style={{ display: "flex", gap: "15px", flexWrap: "wrap", justifyContent: "center" }}>
-                    <span>🟢 {slots.length} موعد متاح</span>
-                    <span>⏱️ مدة كل موعد: 15 دقيقة</span>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* معلومات الحجز */}
-          {(selectedTime || patientName || patientPhone) && (
-            <div className="card" style={{ marginBottom: "20px", border: "2px solid var(--primary-light)" }}>
-              <h3 style={{ color: "var(--primary-dark)", marginBottom: "20px", display: "flex", alignItems: "center", gap: "10px" }}>
-                <span>📝</span> معلومات الحجز
-              </h3>
-
-              {selectedTime && (
-                <div style={{
-                  background: "var(--gray-50)",
-                  padding: "15px",
-                  borderRadius: "10px",
-                  marginBottom: "20px",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center"
-                }}>
-                  <span style={{ color: "var(--gray-600)" }}>الموعد المختار:</span>
-                  <span style={{ 
-                    fontWeight: "bold", 
-                    color: "var(--primary-dark)",
-                    fontSize: "1.1rem"
-                  }}>
-                    {selectedTime}
-                  </span>
-                </div>
-              )}
-
-              <input
-                placeholder="الاسم الكامل"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
+            <div
+              style={{
+                width: "100%",
+                padding: "22px 20px",
+                borderRadius: "22px",
+                background: "#EFD9D5",
+                border: "1.2px solid #D8A7A0",
+                marginBottom: "18px",
+              }}
+            >
+              <div
                 style={{
-                  width: "100%",
-                  padding: "12px 15px",
-                  borderRadius: "10px",
-                  border: "2px solid var(--gray-200)",
-                  marginBottom: "15px",
-                  fontSize: "1rem",
-                  outline: "none"
-                }}
-                onFocus={(e) => e.target.style.borderColor = "var(--primary)"}
-                onBlur={(e) => e.target.style.borderColor = "var(--gray-200)"}
-              />
-              
-              <input
-                placeholder="رقم الجوال (05xxxxxxxx)"
-                value={patientPhone}
-                onChange={(e) => setPatientPhone(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "12px 15px",
-                  borderRadius: "10px",
-                  border: "2px solid var(--gray-200)",
-                  marginBottom: "20px",
-                  fontSize: "1rem",
-                  outline: "none",
-                }}
-                onFocus={(e) => e.target.style.borderColor = "var(--primary)"}
-                onBlur={(e) => e.target.style.borderColor = "var(--gray-200)"}
-              />
-
-              <button
-                onClick={book}
-                disabled={saving || !selectedTime}
-                style={{
-                  width: "100%",
-                  padding: "15px",
-                  borderRadius: "12px",
-                  border: "none",
-                  background: !selectedTime 
-                    ? "var(--gray-300)" 
-                    : "linear-gradient(135deg, var(--secondary), var(--secondary-light))",
-                  color: !selectedTime ? "var(--gray-600)" : "var(--gray-800)",
-                  fontSize: "1.1rem",
-                  fontWeight: "600",
-                  cursor: !selectedTime ? "not-allowed" : "pointer",
-                  transition: "all 0.3s ease"
+                  fontSize: "0.95rem",
+                  color: "#8A6E69",
+                  marginBottom: "8px",
                 }}
               >
-                {saving ? "⏳ جاري الحجز..." : "✅ تأكيد الحجز"}
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        /* رسالة النجاح */
-        <div className="card" style={{ 
-          textAlign: "center",
-          border: "3px solid #10b981"
-        }}>
-          <div style={{ fontSize: "5rem", marginBottom: "20px" }}>🎉</div>
-          <h2 style={{ color: "#065f46", marginBottom: "15px" }}>تم حجز الموعد بنجاح!</h2>
-          
-          {bookingDetails && (
-            <div style={{
-              background: "var(--gray-50)",
-              padding: "20px",
-              borderRadius: "15px",
-              marginBottom: "20px",
-              textAlign: "right"
-            }}>
-              <p><strong>📋 رقم الحجز:</strong> {bookingDetails.number}</p>
-              <p><strong>📅 التاريخ:</strong> {new Date(bookingDetails.date).toLocaleDateString('ar-EG')}</p>
-              <p><strong>⏰ الوقت:</strong> {bookingDetails.time}</p>
-              <p><strong>👤 الاسم:</strong> {bookingDetails.name}</p>
-              <p><strong>📞 الجوال:</strong> {bookingDetails.phone}</p>
-            </div>
-          )}
+                رقم الحجز
+              </div>
 
-          <div style={{ display: "flex", gap: "10px", justifyContent: "center", flexWrap: "wrap" }}>
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(msg?.text || "")}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "12px 24px",
-                borderRadius: "50px",
-                background: "#25D366",
-                color: "white",
-                textDecoration: "none",
-                fontWeight: "600"
-              }}
-            >
-              <span>📱</span> إرسال عبر واتساب
-            </a>
-            
+              <div
+                style={{
+                  fontSize: "2.25rem",
+                  fontWeight: 800,
+                  color: PRIMARY,
+                  letterSpacing: "1px",
+                  lineHeight: 1.2,
+                  wordBreak: "break-word",
+                }}
+              >
+                {bookingNumber}
+              </div>
+            </div>
+
             <button
-              onClick={() => {
-                setBookingComplete(false);
-                setMsg(null);
-              }}
+              type="button"
+              onClick={() => setBookingModalOpen(false)}
               style={{
-                padding: "12px 24px",
-                borderRadius: "50px",
-                background: "transparent",
-                border: "2px solid var(--primary)",
-                color: "var(--primary)"
+                width: "100%",
+                padding: "14px",
+                fontWeight: 800,
               }}
             >
-              حجز موعد آخر
+              حسنًا
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* رسائل الخطأ/النجاح */}
-      {msg && !bookingComplete && (
-        <div className="card" style={{
-          marginTop: "20px",
-          padding: "20px",
-          backgroundColor: msg.type === "error" ? "#fee2e2" : 
-                         msg.type === "success" ? "#d1fae5" : "#e2e3e5",
-          border: "none"
-        }}>
-          <div style={{ whiteSpace: "pre-wrap", color: msg.type === "error" ? "#991b1b" : "#065f46" }}>
-            {msg.text}
-          </div>
-          
-          {msg.type === "success" && (
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(msg.text)}`}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "8px",
-                marginTop: "15px",
-                padding: "10px 20px",
-                borderRadius: "50px",
-                background: "#25D366",
-                color: "white",
-                textDecoration: "none",
-                fontWeight: "600"
-              }}
-            >
-              <span>📱</span> إرسال التفاصيل عبر واتساب
-            </a>
-          )}
-        </div>
-      )}
+function SectionCard({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="card"
+      style={{
+        marginBottom: "20px",
+        padding: "22px",
+        borderRadius: "24px",
+        textAlign: "right",
+        border: "1.2px solid rgba(139,0,0,0.15)",
+        boxShadow:
+          "0 8px 20px rgba(0,0,0,0.03), 0 4px 15px rgba(139,0,0,0.05)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
-      {/* معلومات إضافية */}
-      <div className="card" style={{ marginTop: "20px", textAlign: "center" }}>
-        <h4 style={{ color: "var(--primary-dark)", marginBottom: "10px" }}>📌 ملاحظات مهمة</h4>
-        <p style={{ color: "var(--gray-600)", fontSize: "0.95rem" }}>
-          • يرجى الحضور قبل الموعد بـ 10 دقائق<br />
-          • في حالة التأخير أكثر من 15 دقيقة سيتم إلغاء الحجز<br />
-          • يمكنك إلغاء الحجز قبل 24 ساعة على الأقل
-        </p>
+function SectionHeader({
+  title,
+  small = false,
+}: {
+  title: string;
+  small?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        marginBottom: "18px",
+      }}
+    >
+      <div
+        style={{
+          width: "5px",
+          height: small ? "24px" : "30px",
+          borderRadius: "10px",
+          background: "linear-gradient(180deg, #8B0000, #C04040)",
+          flexShrink: 0,
+        }}
+      />
+      <div
+        style={{
+          fontSize: small ? "1.1rem" : "1.35rem",
+          fontWeight: 800,
+          color: "#8B0000",
+        }}
+      >
+        {title}
       </div>
     </div>
   );
+}
+
+function formatDate(date: Date) {
+  const y = date.getFullYear().toString().padStart(4, "0");
+  const m = (date.getMonth() + 1).toString().padStart(2, "0");
+  const d = date.getDate().toString().padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatDisplayDate(dateStr: string) {
+  const date = new Date(dateStr);
+  return `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+}
+
+function weekdayEnglish(date: Date) {
+  const names = [
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+  ];
+  return names[date.getDay() === 0 ? 6 : date.getDay() - 1];
+}
+
+function matchesDay(dbValue: unknown, selectedDate: Date) {
+  if (dbValue == null) return false;
+  const value = String(dbValue).trim().toLowerCase();
+  return value === weekdayEnglish(selectedDate);
+}
+
+function timeToMinutes(raw: string) {
+  const cleaned = raw.trim();
+  const parts = cleaned.split(":");
+
+  if (parts.length < 2) {
+    throw new Error(`تنسيق وقت غير صحيح: ${raw}`);
+  }
+
+  const hour = Number(parts[0]);
+  const minute = Number(parts[1]);
+  return hour * 60 + minute;
+}
+
+function normalizeTime(raw: unknown) {
+  if (raw == null) return "";
+  const value = String(raw).trim();
+  if (!value) return "";
+
+  const parts = value.split(":");
+  if (parts.length >= 2) {
+    const hh = parts[0].padStart(2, "0");
+    const mm = parts[1].padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+
+  return value;
+}
+
+function generateSlots(start: string, end: string, step = 15) {
+  const startMinutes = timeToMinutes(start);
+  const endMinutes = timeToMinutes(end);
+
+  const slots: string[] = [];
+
+  for (let current = startMinutes; current < endMinutes; current += step) {
+    const hh = String(Math.floor(current / 60)).padStart(2, "0");
+    const mm = String(current % 60).padStart(2, "0");
+    slots.push(`${hh}:${mm}`);
+  }
+
+  return slots;
+}
+
+function isInRange(time: string, start: string, end: string) {
+  const t = timeToMinutes(time);
+  const s = timeToMinutes(start);
+  const e = timeToMinutes(end);
+  return t >= s && t < e;
+}
+
+function getDayNameArabicFromDate(dateStr: string) {
+  const days = [
+    "الأحد",
+    "الاثنين",
+    "الثلاثاء",
+    "الأربعاء",
+    "الخميس",
+    "الجمعة",
+    "السبت",
+  ];
+  return days[new Date(dateStr).getDay()];
 }

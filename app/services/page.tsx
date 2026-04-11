@@ -1,434 +1,448 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { supabase } from "../../lib/supabaseClient";
+import { useState } from "react";
+import Link from "next/link";
 
-type Service = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number | null;
-  duration_minutes: number | null;
-  category?: string;
+type ManualServiceCategory = {
+  title: string;
+  icon: string;
+  items: string[];
 };
 
+const PRIMARY = "#8B0000";
+const BG_ITEM = "#FDF9F6";
+
+const manualCategories: ManualServiceCategory[] = [
+  {
+    title: "خدمات متابعة الحمل",
+    icon: "🤰",
+    items: [
+      "تشخيص وتأكيد الحمل المبكر",
+      "متابعة الحمل الدوري بالسونار والفحوصات",
+      "متابعة نمو الجنين ونبضه",
+      "متابعة ضغط الدم وسكر الحمل",
+      "متابعة حالات الحمل عالي الخطورة",
+      "علاج مشاكل الحمل مثل النزيف أو الالتهابات",
+      "تحديد موعد وطريقة الولادة المناسبة",
+    ],
+  },
+  {
+    title: "خدمات الولادة",
+    icon: "👶",
+    items: ["إجراء الولادة القيصرية", "علاج النزيفات بعد الولادة"],
+  },
+  {
+    title: "خدمات أمراض النساء",
+    icon: "👩",
+    items: [
+      "تشخيص وعلاج اضطرابات الدورة الشهرية",
+      "تشخيص وعلاج تكيس المبايض",
+      "علاج الالتهابات المهبلية والرحمية",
+      "علاج النزيف الرحمي غير الطبيعي",
+      "تشخيص وعلاج آلام الحوض",
+      "تقييم وعلاج تأخر الحمل والعقم",
+    ],
+  },
+  {
+    title: "تنظيم الأسرة",
+    icon: "👨‍👩‍👧",
+    items: [
+      "تركيب وإزالة اللولب",
+      "وصف حبوب منع الحمل",
+      "الاستشارة حول أفضل وسيلة مناسبة",
+    ],
+  },
+  {
+    title: "الفحوصات النسائية",
+    icon: "🩺",
+    items: [
+      "فحص السونار للرحم والمبايض",
+      "السونار لمتابعة الحمل",
+      "مسحة عنق الرحم (Pap smear)",
+      "فحص الثدي",
+      "طلب وتقييم الفحوصات الهرمونية",
+    ],
+  },
+  {
+    title: "العمليات النسائية",
+    icon: "🏥",
+    items: [
+      "إزالة أكياس المبيض",
+      "استئصال الرحم",
+      "فك الالتصاقات",
+      "عمليات هبوط الرحم",
+      "تنظيف الرحم",
+    ],
+  },
+  {
+    title: "الاستشارات الصحية",
+    icon: "💚",
+    items: [
+      "صحة المرأة قبل الزواج",
+      "متابعة سن اليأس",
+      "علاج اضطرابات الهرمونات",
+      "التوعية بسرطان الثدي وعنق الرحم",
+    ],
+  },
+];
+
+function SectionTitle({ title, icon }: { title: string; icon: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        marginBottom: "16px",
+      }}
+    >
+      <div
+        style={{
+          width: "42px",
+          height: "42px",
+          borderRadius: "14px",
+          background: "rgba(139,0,0,0.10)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "1.3rem",
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </div>
+      <div
+        style={{
+          fontSize: "1.35rem",
+          fontWeight: 800,
+          color: PRIMARY,
+        }}
+      >
+        {title}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState() {
+  return (
+    <div
+      className="card"
+      style={{
+        marginTop: "14px",
+        padding: "28px",
+        borderRadius: "22px",
+        textAlign: "center",
+      }}
+    >
+      <div style={{ fontSize: "3rem", marginBottom: "12px" }}>🔎</div>
+      <div
+        style={{
+          fontSize: "1.15rem",
+          color: "var(--text)",
+          fontWeight: 800,
+          marginBottom: "8px",
+        }}
+      >
+        لا توجد نتائج مطابقة
+      </div>
+      <div
+        style={{
+          color: "var(--text-soft)",
+          fontSize: "0.95rem",
+        }}
+      >
+        جرّب البحث باسم خدمة أخرى
+      </div>
+    </div>
+  );
+}
+
+function ServiceItem({ item }: { item: string }) {
+  return (
+    <div
+      style={{
+        marginBottom: "8px",
+        padding: "12px 14px",
+        background: BG_ITEM,
+        borderRadius: "16px",
+        border: "1px solid rgba(139,0,0,0.08)",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "10px",
+      }}
+    >
+      <div
+        style={{
+          color: PRIMARY,
+          fontSize: "1rem",
+          lineHeight: 1.6,
+          flexShrink: 0,
+        }}
+      >
+        ✓
+      </div>
+      <div
+        style={{
+          color: "var(--text)",
+          fontSize: "0.95rem",
+          lineHeight: 1.7,
+          fontWeight: 500,
+        }}
+      >
+        {item}
+      </div>
+    </div>
+  );
+}
+
+function CategoryCard({
+  category,
+  open,
+  onToggle,
+}: {
+  category: ManualServiceCategory;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div
+      style={{
+        marginBottom: "14px",
+        background: "white",
+        borderRadius: "22px",
+        boxShadow: "0 5px 12px rgba(0,0,0,0.03)",
+        overflow: "hidden",
+        border: "1px solid rgba(139,0,0,0.08)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{
+          width: "100%",
+          background: "white",
+          color: "inherit",
+          boxShadow: "none",
+          border: "none",
+          borderRadius: 0,
+          padding: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "14px",
+          textAlign: "right",
+        }}
+      >
+        <div
+          style={{
+            width: "48px",
+            height: "48px",
+            borderRadius: "14px",
+            background: "rgba(139,0,0,0.10)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1.4rem",
+            flexShrink: 0,
+          }}
+        >
+          {category.icon}
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              fontWeight: 800,
+              color: PRIMARY,
+              fontSize: "1.05rem",
+              marginBottom: "4px",
+            }}
+          >
+            {category.title}
+          </div>
+          <div
+            style={{
+              color: "var(--text-soft)",
+              fontSize: "0.86rem",
+              fontWeight: 600,
+            }}
+          >
+            {category.items.length} خدمة
+          </div>
+        </div>
+
+        <div
+          style={{
+            color: PRIMARY,
+            fontSize: "1.1rem",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.25s ease",
+            flexShrink: 0,
+          }}
+        >
+          ⌄
+        </div>
+      </button>
+
+      {open && (
+        <div
+          style={{
+            padding: "0 14px 14px 14px",
+          }}
+        >
+          {category.items.map((item) => (
+            <ServiceItem key={`${category.title}-${item}`} item={item} />
+          ))}
+
+          <div style={{ marginTop: "10px" }}>
+            <Link
+              href="/book"
+              style={{
+                display: "inline-flex",
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "10px",
+                padding: "14px 22px",
+                borderRadius: "999px",
+                background: PRIMARY,
+                color: "white",
+                fontWeight: 800,
+                textDecoration: "none",
+              }}
+            >
+              <span>📅</span>
+              احجز الآن
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ServicesPage() {
-  const [services, setServices] = useState<Service[]>([]);
-  const [filteredServices, setFilteredServices] = useState<Service[]>([]);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState("الكل");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>(
+    {}
+  );
 
-  // تصنيف الخدمات (يمكن تعديلها حسب قاعدة البيانات)
-  const categories = [
-    "الكل",
-    "استشارات نسائية",
-    "متابعة حمل",
-    "فحوصات",
-    "تحاليل مخبرية",
-    "خدمات الولادة"
-  ];
+  const filteredManualCategories =
+    searchQuery.trim() === ""
+      ? manualCategories
+      : manualCategories
+          .map((category) => {
+            const filteredItems = category.items.filter((item) =>
+              item.toLowerCase().includes(searchQuery.toLowerCase())
+            );
 
-  useEffect(() => {
-    fetchServices();
-  }, []);
+            if (category.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+              return category;
+            }
 
-  useEffect(() => {
-    // تصفية الخدمات حسب الفئة والبحث
-    let filtered = [...services];
-    
-    if (selectedCategory !== "الكل") {
-      filtered = filtered.filter(s => s.category === selectedCategory);
-    }
-    
-    if (searchTerm) {
-      filtered = filtered.filter(s => 
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.description?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    setFilteredServices(filtered);
-  }, [services, selectedCategory, searchTerm]);
+            return {
+              ...category,
+              items: filteredItems,
+            };
+          })
+          .filter((category) => category.items.length > 0);
 
-  const fetchServices = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("services")
-      .select("id,name,description,price,duration_minutes")
-      .order("name");
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-    
-    // إضافة تصنيف افتراضي للخدمات (يمكن تعديله حسب قاعدة البيانات)
-    const servicesWithCategory = (data ?? []).map((service, index) => ({
-      ...service,
-      category: categories[1 + (index % 4)] // توزيع عشوائي للتصنيفات
-    })) as Service[];
-    
-    setServices(servicesWithCategory);
-    setFilteredServices(servicesWithCategory);
-    setLoading(false);
-  };
-
-  const formatPrice = (price: number | null) => {
-    if (!price) return "يحدد لاحقاً";
-    return new Intl.NumberFormat('ar-YE').format(price) + " ريال";
-  };
-
-  const getCategoryIcon = (category: string) => {
-    const icons: Record<string, string> = {
-      "استشارات نسائية": "👩‍⚕️",
-      "متابعة حمل": "🤰",
-      "فحوصات": "🔬",
-      "تحاليل مخبرية": "🧪",
-      "خدمات الولادة": "👶"
-    };
-    return icons[category] || "🏥";
+  const toggleCategory = (title: string) => {
+    setOpenCategories((prev) => ({
+      ...prev,
+      [title]: !prev[title],
+    }));
   };
 
   return (
-    <div className="section-container">
-      {/* رأس الصفحة */}
-      <div style={{ textAlign: "center", marginBottom: "40px" }}>
-        <h1 style={{ color: "var(--primary-dark)", fontSize: "2.5rem" }}>
-          الخدمات والأسعار
-        </h1>
-        <div style={{ 
-          width: "100px", 
-          height: "4px", 
-          background: "linear-gradient(90deg, var(--primary), var(--secondary))",
-          margin: "15px auto",
-          borderRadius: "2px"
-        }}></div>
-        <p style={{ color: "var(--gray-600)", fontSize: "1.1rem", maxWidth: "600px", margin: "0 auto" }}>
-          نقدم مجموعة متكاملة من الخدمات الطبية للنساء والأمهات بأعلى معايير الجودة
-        </p>
-      </div>
-
-      {/* شريط البحث والتصفية */}
-      <div className="card" style={{ marginBottom: "30px" }}>
-        <div style={{
-          display: "flex",
-          gap: "20px",
-          flexWrap: "wrap",
-          alignItems: "center"
-        }}>
-          {/* بحث */}
-          <div style={{ flex: 1, minWidth: "250px" }}>
-            <div style={{ position: "relative" }}>
-              <span style={{
+    <div className="section-container" style={{ maxWidth: "980px" }}>
+      {/* البحث */}
+      <div
+        style={{
+          marginBottom: "22px",
+        }}
+      >
+        <div
+          style={{
+            background: "white",
+            borderRadius: "18px",
+            boxShadow: "0 4px 10px rgba(0,0,0,0.03)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ position: "relative" }}>
+            <span
+              style={{
                 position: "absolute",
-                right: "15px",
+                right: "16px",
                 top: "50%",
                 transform: "translateY(-50%)",
-                color: "var(--gray-400)"
-              }}>
-                🔍
-              </span>
-              <input
-                type="text"
-                placeholder="ابحث عن خدمة..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "12px 45px 12px 15px",
-                  borderRadius: "50px",
-                  border: "2px solid var(--gray-200)",
-                  fontSize: "1rem",
-                  outline: "none"
-                }}
-                onFocus={(e) => e.target.style.borderColor = "var(--primary)"}
-                onBlur={(e) => e.target.style.borderColor = "var(--gray-200)"}
-              />
-            </div>
-          </div>
+                color: PRIMARY,
+                fontSize: "1.1rem",
+              }}
+            >
+              🔍
+            </span>
 
-          {/* تصفية حسب الفئة */}
-          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            {categories.map((cat) => (
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="ابحث عن خدمة..."
+              style={{
+                width: "100%",
+                border: "none",
+                outline: "none",
+                background: "white",
+                padding: "16px 48px 16px 48px",
+                fontSize: "1rem",
+              }}
+            />
+
+            {searchQuery && (
               <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
+                type="button"
+                onClick={() => setSearchQuery("")}
                 style={{
-                  padding: "8px 20px",
-                  borderRadius: "50px",
+                  position: "absolute",
+                  left: "10px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  width: "34px",
+                  height: "34px",
+                  borderRadius: "50%",
+                  padding: 0,
+                  background: "transparent",
+                  color: "var(--text-soft)",
+                  boxShadow: "none",
                   border: "none",
-                  background: selectedCategory === cat 
-                    ? "linear-gradient(135deg, var(--primary), var(--primary-dark))"
-                    : "var(--gray-100)",
-                  color: selectedCategory === cat ? "white" : "var(--gray-700)",
-                  cursor: "pointer",
-                  fontWeight: selectedCategory === cat ? "600" : "400",
-                  transition: "all 0.3s ease"
                 }}
               >
-                {getCategoryIcon(cat)} {cat}
+                ✕
               </button>
-            ))}
+            )}
           </div>
         </div>
       </div>
 
-      {/* حالة التحميل */}
-      {loading && (
-        <div className="card" style={{ textAlign: "center", padding: "60px" }}>
-          <div style={{ fontSize: "3rem", marginBottom: "15px" }}>⏳</div>
-          <p style={{ color: "var(--gray-600)" }}>جاري تحميل الخدمات...</p>
+      {/* عنوان القسم */}
+      <SectionTitle title="خدمات النساء والولادة" icon="💗" />
+
+      {/* المحتوى */}
+      {filteredManualCategories.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <div style={{ marginTop: "12px" }}>
+          {filteredManualCategories.map((category) => (
+            <CategoryCard
+              key={category.title}
+              category={category}
+              open={!!openCategories[category.title]}
+              onToggle={() => toggleCategory(category.title)}
+            />
+          ))}
         </div>
       )}
-
-      {/* عرض الأخطاء */}
-      {error && (
-        <div className="card" style={{ 
-          backgroundColor: "#fee2e2", 
-          color: "#991b1b",
-          border: "none"
-        }}>
-          <p>❌ {error}</p>
-        </div>
-      )}
-
-      {/* إحصائيات سريعة */}
-      {!loading && !error && filteredServices.length > 0 && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-          gap: "15px",
-          marginBottom: "30px"
-        }}>
-          <div className="card" style={{ textAlign: "center", padding: "15px" }}>
-            <div style={{ fontSize: "2rem", color: "var(--primary)" }}>📋</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--primary-dark)" }}>
-              {filteredServices.length}
-            </div>
-            <div style={{ color: "var(--gray-600)" }}>خدمة متاحة</div>
-          </div>
-          
-          <div className="card" style={{ textAlign: "center", padding: "15px" }}>
-            <div style={{ fontSize: "2rem", color: "var(--secondary)" }}>⏱️</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--primary-dark)" }}>
-              {Math.min(...filteredServices.map(s => s.duration_minutes || 30))}+
-            </div>
-            <div style={{ color: "var(--gray-600)" }}>أقل مدة (دقيقة)</div>
-          </div>
-          
-          <div className="card" style={{ textAlign: "center", padding: "15px" }}>
-            <div style={{ fontSize: "2rem", color: "#10b981" }}>💰</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "var(--primary-dark)" }}>
-              {filteredServices.filter(s => s.price).length}
-            </div>
-            <div style={{ color: "var(--gray-600)" }}>خدمة بسعر محدد</div>
-          </div>
-        </div>
-      )}
-
-      {/* شبكة الخدمات */}
-      {!loading && !error && (
-        <>
-          {filteredServices.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: "60px" }}>
-              <div style={{ fontSize: "4rem", marginBottom: "20px" }}>😕</div>
-              <h3 style={{ color: "var(--primary-dark)", marginBottom: "10px" }}>لا توجد خدمات</h3>
-              <p style={{ color: "var(--gray-600)" }}>
-                {searchTerm ? "لا توجد نتائج للبحث" : "لا توجد خدمات في هذه الفئة"}
-              </p>
-            </div>
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-              gap: "25px"
-            }}>
-              {filteredServices.map((service) => (
-                <div key={service.id} className="card" style={{
-                  position: "relative",
-                  overflow: "hidden",
-                  transition: "transform 0.3s ease"
-                }}>
-                  {/* شريط علوي ملون حسب الفئة */}
-                  <div style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: "6px",
-                    background: `linear-gradient(90deg, var(--primary), var(--secondary))`,
-                  }}></div>
-
-                  {/* أيقونة الفئة */}
-                  <div style={{
-                    position: "absolute",
-                    top: "15px",
-                    left: "15px",
-                    fontSize: "2.5rem",
-                    opacity: 0.2
-                  }}>
-                    {getCategoryIcon(service.category || "")}
-                  </div>
-
-                  {/* محتوى الخدمة */}
-                  <div style={{ position: "relative", zIndex: 1 }}>
-                    <h3 style={{ 
-                      color: "var(--primary-dark)", 
-                      fontSize: "1.4rem",
-                      marginBottom: "10px",
-                      paddingLeft: "40px"
-                    }}>
-                      {service.name}
-                    </h3>
-
-                    {service.description && (
-                      <p style={{ 
-                        color: "var(--gray-600)", 
-                        lineHeight: "1.7",
-                        marginBottom: "20px",
-                        borderRight: "3px solid var(--primary-light)",
-                        paddingRight: "15px"
-                      }}>
-                        {service.description}
-                      </p>
-                    )}
-
-                    {/* تفاصيل السعر والمدة */}
-                    <div style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginTop: "20px",
-                      padding: "15px",
-                      background: "var(--gray-50)",
-                      borderRadius: "12px"
-                    }}>
-                      <div style={{ textAlign: "center", flex: 1 }}>
-                        <div style={{ fontSize: "0.9rem", color: "var(--gray-500)", marginBottom: "5px" }}>
-                          💰 السعر
-                        </div>
-                        <div style={{ 
-                          fontSize: "1.2rem", 
-                          fontWeight: "bold", 
-                          color: "var(--primary-dark)"
-                        }}>
-                          {formatPrice(service.price)}
-                        </div>
-                      </div>
-
-                      <div style={{ 
-                        width: "1px", 
-                        height: "40px", 
-                        background: "var(--gray-300)",
-                        margin: "0 15px"
-                      }}></div>
-
-                      <div style={{ textAlign: "center", flex: 1 }}>
-                        <div style={{ fontSize: "0.9rem", color: "var(--gray-500)", marginBottom: "5px" }}>
-                          ⏱️ المدة
-                        </div>
-                        <div style={{ 
-                          fontSize: "1.2rem", 
-                          fontWeight: "bold", 
-                          color: "var(--secondary)"
-                        }}>
-                          {service.duration_minutes || 30} دقيقة
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* تصنيف الخدمة */}
-                    {service.category && (
-                      <div style={{
-                        marginTop: "15px",
-                        display: "flex",
-                        gap: "10px",
-                        alignItems: "center"
-                      }}>
-                        <span style={{
-                          background: "var(--gray-100)",
-                          color: "var(--gray-600)",
-                          padding: "5px 15px",
-                          borderRadius: "20px",
-                          fontSize: "0.85rem"
-                        }}>
-                          {getCategoryIcon(service.category)} {service.category}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* زر حجز الخدمة */}
-                    <button
-                      onClick={() => window.location.href = "/book"}
-                      style={{
-                        width: "100%",
-                        marginTop: "20px",
-                        padding: "12px",
-                        borderRadius: "10px",
-                        border: "2px solid var(--primary)",
-                        background: "transparent",
-                        color: "var(--primary)",
-                        fontWeight: "600",
-                        cursor: "pointer",
-                        transition: "all 0.3s ease"
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--primary)";
-                        e.currentTarget.style.color = "white";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                        e.currentTarget.style.color = "var(--primary)";
-                      }}
-                    >
-                      📅 احجز هذه الخدمة
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* معلومات إضافية */}
-      <div className="card" style={{ 
-        marginTop: "40px",
-        background: "linear-gradient(135deg, var(--primary), var(--primary-dark))",
-        color: "white",
-        textAlign: "center"
-      }}>
-        <h3 style={{ color: "white", marginBottom: "20px" }}>📞 هل لديك استفسار؟</h3>
-        <p style={{ color: "white", marginBottom: "20px", opacity: 0.9 }}>
-          فريقنا جاهز للإجابة على جميع استفساراتك حول الخدمات والأسعار
-        </p>
-        <div style={{ display: "flex", gap: "15px", justifyContent: "center", flexWrap: "wrap" }}>
-          <a href="tel:0123456789" style={{
-            padding: "12px 25px",
-            background: "white",
-            color: "var(--primary)",
-            textDecoration: "none",
-            borderRadius: "50px",
-            fontWeight: "600"
-          }}>
-            📞 0123456789
-          </a>
-          <a href="/contact" style={{
-            padding: "12px 25px",
-            background: "transparent",
-            color: "white",
-            textDecoration: "none",
-            borderRadius: "50px",
-            fontWeight: "600",
-            border: "2px solid white"
-          }}>
-            ✉️ تواصل معنا
-          </a>
-        </div>
-      </div>
     </div>
   );
 }
