@@ -6,6 +6,7 @@ const doctors = [
     name: "د. آسيا محمد ناجي",
     specialty: "استشارية امراض وجراحة نساء وولادة وعقم",
     image: "/doctors/asia.jpg",
+    phone: "771658590",
     workTimes: [
       {
         day: "السبت والأربعاء",
@@ -21,6 +22,7 @@ const doctors = [
     name: "د. رشاء محمد علي",
     specialty: "اخصائية امراض وجراحة نساء وولادة",
     image: "/doctors/rasha.jpeg",
+    phone: "777617111",
     workTimes: [
       {
         day: "السبت والأربعاء",
@@ -91,15 +93,84 @@ function WorkTimeItem({ day, time }: { day: string; time: string }) {
   );
 }
 
+function ContactItem({ phone }: { phone: string }) {
+  return (
+    <a
+      href={`tel:${phone}`}
+      style={{
+        textDecoration: "none",
+        display: "block",
+      }}
+    >
+      <div
+        style={{
+          marginBottom: "14px",
+          padding: "16px",
+          background: "var(--bg-soft)",
+          borderRadius: "18px",
+          border: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "14px",
+        }}
+      >
+        <div
+          style={{
+            width: "46px",
+            height: "46px",
+            borderRadius: "15px",
+            background:
+              "linear-gradient(135deg, rgba(139,0,0,0.12), rgba(139,0,0,0.05))",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "1.2rem",
+            flexShrink: 0,
+            border: "1px solid rgba(139,0,0,0.10)",
+          }}
+        >
+          📞
+        </div>
+
+        <div>
+          <div
+            style={{
+              fontSize: "1rem",
+              fontWeight: 800,
+              color: "var(--primary)",
+              marginBottom: "4px",
+            }}
+          >
+            للتواصل والاستفسار
+          </div>
+          <div
+            style={{
+              fontSize: "0.98rem",
+              color: "var(--text)",
+              lineHeight: 1.8,
+              direction: "ltr",
+              fontWeight: 700,
+            }}
+          >
+            {phone}
+          </div>
+        </div>
+      </div>
+    </a>
+  );
+}
+
 function DoctorCard({
   name,
   specialty,
   image,
+  phone,
   workTimes,
 }: {
   name: string;
   specialty: string;
   image: string;
+  phone: string;
   workTimes: { day: string; time: string }[];
 }) {
   return (
@@ -206,6 +277,8 @@ function DoctorCard({
         {workTimes.map((item, index) => (
           <WorkTimeItem key={index} day={item.day} time={item.time} />
         ))}
+
+        <ContactItem phone={phone} />
       </div>
 
       <Link
@@ -223,6 +296,7 @@ function DoctorCard({
           fontWeight: 800,
           fontSize: "1rem",
           boxShadow: "0 10px 24px rgba(139,0,0,0.18)",
+          textDecoration: "none",
         }}
       >
         <span style={{ fontSize: "1.1rem" }}>📅</span>
@@ -235,7 +309,6 @@ function DoctorCard({
 export default function AboutPage() {
   return (
     <div className="section-container">
-      {/* رأس الصفحة */}
       <div style={{ textAlign: "center", marginBottom: "34px" }}>
         <h1 style={{ marginBottom: "10px" }}>الطبيبات</h1>
         <p
@@ -248,11 +321,10 @@ export default function AboutPage() {
           }}
         >
           تعرفي على الطبيبات العاملات في مركز آسيا الطبي، واطلعي على التخصصات
-          وأوقات العمل، ثم احجزي موعدك بسهولة بالطريقة نفسها الموجودة في التطبيق.
+          وأوقات العمل ووسائل التواصل والاستفسار.
         </p>
       </div>
 
-      {/* البطاقات */}
       <div
         style={{
           display: "grid",
@@ -266,6 +338,7 @@ export default function AboutPage() {
             name={doctor.name}
             specialty={doctor.specialty}
             image={doctor.image}
+            phone={doctor.phone}
             workTimes={doctor.workTimes}
           />
         ))}

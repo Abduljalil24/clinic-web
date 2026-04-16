@@ -7,6 +7,8 @@ import { supabase } from "../../lib/supabaseClient";
 type Result = {
   booking_number: string;
   appointment_date: string;
+  appointment_time: string;
+  status: string;
 };
 
 export default function VerifyPage() {
@@ -39,9 +41,7 @@ export default function VerifyPage() {
         p_booking: bookingCode.trim(),
       });
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
       const row = (data?.[0] ?? null) as Record<string, any> | null;
 
@@ -54,6 +54,8 @@ export default function VerifyPage() {
       setResult({
         booking_number: String(row.booking_number ?? ""),
         appointment_date: String(row.appointment_date ?? ""),
+        appointment_time: String(row.appointment_time ?? ""),
+        status: String(row.status ?? "pending"),
       });
 
       setMsg({ text: "✅ تم العثور على الحجز بنجاح", type: "success" });
@@ -80,9 +82,63 @@ export default function VerifyPage() {
     });
   };
 
+  const formatTime = (rawTime: string) => {
+    try {
+      const parts = rawTime.split(":");
+      if (parts.length < 2) return rawTime;
+
+      const hour = Number(parts[0]);
+      const minute = Number(parts[1]);
+
+      const period = hour >= 12 ? "م" : "ص";
+      const adjustedHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+
+      return `${adjustedHour}:${String(minute).padStart(2, "0")} ${period}`;
+    } catch {
+      return rawTime;
+    }
+  };
+
+  const statusConfig = (status: string) => {
+    const key = status.toLowerCase();
+
+    if (key === "confirmed") {
+      return {
+        label: "مؤكد",
+        color: "#065f46",
+        bg: "#d1fae5",
+        icon: "✅",
+      };
+    }
+
+    if (key === "completed") {
+      return {
+        label: "مكتمل",
+        color: "#1e40af",
+        bg: "#dbeafe",
+        icon: "🎉",
+      };
+    }
+
+    if (key === "cancelled" || key === "canceled") {
+      return {
+        label: "ملغي",
+        color: "#991b1b",
+        bg: "#fee2e2",
+        icon: "❌",
+      };
+    }
+
+    return {
+      label: "قيد الانتظار",
+      color: "#92400e",
+      bg: "#fef3c7",
+      icon: "⏳",
+    };
+  };
+
   return (
     <div className="section-container" style={{ maxWidth: "760px" }}>
-      {/* رأس الصفحة */}
       <div style={{ textAlign: "center", marginBottom: "34px" }}>
         <h1 style={{ marginBottom: "10px" }}>التحقق من الحجز</h1>
         <p
@@ -94,11 +150,10 @@ export default function VerifyPage() {
             lineHeight: 1.9,
           }}
         >
-          أدخل رقم الحجز للتحقق من بيانات الموعد الأساسية.
+          أدخل رقم الحجز للتحقق من بيانات الموعد الأساسية وحالة الحجز.
         </p>
       </div>
 
-      {/* بطاقة البحث */}
       <div className="card" style={{ marginBottom: "24px", padding: "22px" }}>
         <div
           style={{
@@ -172,7 +227,6 @@ export default function VerifyPage() {
         </div>
       </div>
 
-      {/* حالة التحميل */}
       {loading && (
         <div className="card" style={{ textAlign: "center", padding: "36px" }}>
           <div style={{ fontSize: "2.7rem", marginBottom: "12px" }}>⏳</div>
@@ -182,7 +236,6 @@ export default function VerifyPage() {
         </div>
       )}
 
-      {/* الرسائل */}
       {msg && !loading && (
         <div
           className="card"
@@ -210,7 +263,6 @@ export default function VerifyPage() {
         </div>
       )}
 
-      {/* نتيجة البحث */}
       {result && !loading && (
         <div
           className="card"
@@ -222,13 +274,32 @@ export default function VerifyPage() {
           <h3
             style={{
               color: "var(--primary)",
-              marginBottom: "22px",
+              marginBottom: "18px",
               textAlign: "center",
               fontSize: "1.4rem",
             }}
           >
             تفاصيل الحجز
           </h3>
+
+          <div style={{ textAlign: "center", marginBottom: "20px" }}>
+            <span
+              style={{
+                backgroundColor: statusConfig(result.status).bg,
+                color: statusConfig(result.status).color,
+                padding: "8px 20px",
+                borderRadius: "50px",
+                fontSize: "1rem",
+                fontWeight: 700,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              <span>{statusConfig(result.status).icon}</span>
+              {statusConfig(result.status).label}
+            </span>
+          </div>
 
           <div
             style={{
@@ -315,11 +386,86 @@ export default function VerifyPage() {
                 {formatDate(result.appointment_date)}
               </div>
             </div>
+
+            <div
+              style={{
+                background: "var(--bg-soft)",
+                padding: "18px",
+                borderRadius: "18px",
+                textAlign: "center",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "2rem",
+                  marginBottom: "10px",
+                  color: "#16a34a",
+                }}
+              >
+                ⏰
+              </div>
+              <div
+                style={{
+                  fontSize: "0.9rem",
+                  color: "var(--text-muted)",
+                  marginBottom: "6px",
+                }}
+              >
+                وقت الموعد
+              </div>
+              <div
+                style={{
+                  fontSize: "1.08rem",
+                  fontWeight: 800,
+                  color: "var(--primary)",
+                }}
+              >
+                {formatTime(result.appointment_time)}
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "var(--bg-soft)",
+                padding: "18px",
+                borderRadius: "18px",
+                textAlign: "center",
+                border: "1px solid var(--border)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "2rem",
+                  marginBottom: "10px",
+                  color: statusConfig(result.status).color,
+                }}
+              >
+                {statusConfig(result.status).icon}
+              </div>
+              <div
+                style={{
+                  fontSize: "0.9rem",
+                  color: "var(--text-muted)",
+                  marginBottom: "6px",
+                }}
+              >
+                حالة الحجز
+              </div>
+              <div
+                style={{
+                  fontSize: "1.05rem",
+                  fontWeight: 800,
+                  color: statusConfig(result.status).color,
+                }}
+              >
+                {statusConfig(result.status).label}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* رابط الحجز */}
       <div
         className="card"
         style={{
