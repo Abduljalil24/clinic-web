@@ -349,6 +349,8 @@ function AppointmentsTab() {
     text: "",
     type: "",
   });
+  const [deleteTarget, setDeleteTarget] = useState<Appointment | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const effectiveDate = useMemo(() => {
     const now = new Date();
@@ -452,6 +454,70 @@ function AppointmentsTab() {
     }
   };
 
+  const deleteAppointment = async (id: string, status: string) => {
+    const currentStatus = status.toLowerCase();
+
+    if (currentStatus !== "cancelled" && currentStatus !== "canceled") {
+      setMsg({
+        text: "يجب تغيير حالة الحجز إلى ملغي قبل حذفه",
+        type: "error",
+      });
+      return;
+    }
+
+    setDeletingId(id);
+
+    try {
+      const { count, error: paymentCheckError } = await supabase
+        .from("payments")
+        .select("id", { count: "exact", head: true })
+        .eq("appointment_id", id);
+
+      if (paymentCheckError) throw paymentCheckError;
+
+      if ((count ?? 0) > 0) {
+        setMsg({
+          text: "لا يمكن حذف هذا الحجز لأنه مرتبط بسجل دفع",
+          type: "error",
+        });
+        setDeleteTarget(null);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("appointments")
+        .delete()
+        .eq("id", id)
+        .select("id");
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setMsg({
+          text: "لم يتم حذف الحجز من قاعدة البيانات",
+          type: "error",
+        });
+        return;
+      }
+
+      setAppointments((prev) => prev.filter((item) => item.id !== id));
+
+      setMsg({
+        text: "تم حذف الحجز نهائيًا",
+        type: "success",
+      });
+
+      setDeleteTarget(null);
+    } catch (error: any) {
+      setMsg({
+        text: `فشل حذف الحجز: ${error.message}`,
+        type: "error",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const stats = {
     total: appointments.length,
     confirmed: appointments.filter((a) => a.status === "confirmed").length,
@@ -488,6 +554,120 @@ function AppointmentsTab() {
 
   return (
     <div style={{ padding: "18px 0 0" }}>
+      {deleteTarget && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "18px",
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              width: "100%",
+              maxWidth: "430px",
+              textAlign: "center",
+              borderRadius: "28px",
+              padding: "28px",
+              boxShadow: "0 25px 80px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div
+              style={{
+                width: "64px",
+                height: "64px",
+                borderRadius: "50%",
+                background: "#fee2e2",
+                color: "#dc2626",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "2rem",
+                margin: "0 auto 16px",
+              }}
+            >
+              🗑️
+            </div>
+
+            <h3
+              style={{
+                margin: "0 0 10px",
+                color: PRIMARY,
+                fontSize: "1.35rem",
+              }}
+            >
+              حذف الحجز نهائيًا؟
+            </h3>
+
+            <p
+              style={{
+                margin: "0 0 8px",
+                color: "var(--text-soft)",
+                lineHeight: 1.8,
+                fontWeight: 600,
+              }}
+            >
+              هل أنت متأكد من حذف هذا الحجز من قاعدة البيانات؟
+            </p>
+
+            <div
+              style={{
+                marginBottom: "22px",
+                color: "#dc2626",
+                fontWeight: 800,
+              }}
+            >
+              {deleteTarget.patient_name || "حجز بدون اسم"}
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "12px",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deletingId === deleteTarget.id}
+                style={{
+                  background: "rgba(139,0,0,0.08)",
+                  color: PRIMARY,
+                  boxShadow: "none",
+                  border: "none",
+                  padding: "13px",
+                  fontWeight: 800,
+                }}
+              >
+                إلغاء
+              </button>
+
+              <button
+                type="button"
+                onClick={() => deleteAppointment(deleteTarget.id, deleteTarget.status)}
+                disabled={deletingId === deleteTarget.id}
+                style={{
+                  background: "#dc2626",
+                  color: "white",
+                  boxShadow: "none",
+                  border: "none",
+                  padding: "13px",
+                  fontWeight: 800,
+                }}
+              >
+                {deletingId === deleteTarget.id ? "جاري الحذف..." : "نعم، احذف"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div
         style={{
           display: "grid",
@@ -676,6 +856,25 @@ function AppointmentsTab() {
                       </button>
                     ))}
                   </div>
+                  {(item.status.toLowerCase() === "cancelled" ||
+                    item.status.toLowerCase() === "canceled") && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(item)}
+                      style={{
+                        marginTop: "12px",
+                        width: "100%",
+                        background: "#fee2e2",
+                        color: "#dc2626",
+                        boxShadow: "none",
+                        border: "none",
+                        padding: "12px 14px",
+                        fontWeight: 800,
+                      }}
+                    >
+                      حذف الحجز
+                    </button>
+                  )}
                 </div>
               </div>
             );
