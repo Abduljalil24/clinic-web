@@ -37,6 +37,10 @@ type Message = {
 type TabType = "appointments" | "blocked" | "messages";
 type AppointmentFilterType = "today" | "tomorrow" | "all" | "customDate";
 
+// رمز الإدارة يُحفظ في الذاكرة فقط بعد التحقق منه في قاعدة البيانات،
+// ويُرسل مع كل طلب إدارة. لا يوجد أي PIN داخل كود الموقع.
+let adminPin = "";
+
 const PRIMARY = "#8B0000";
 const SECONDARY = "#C04040";
 
@@ -123,13 +127,9 @@ function AdminLogin({
   const [showPin, setShowPin] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const adminPins = [
-    process.env.NEXT_PUBLIC_ADMIN_PIN_1 ?? "",
-    process.env.NEXT_PUBLIC_ADMIN_PIN_2 ?? "",
-    process.env.NEXT_PUBLIC_ADMIN_PIN_3 ?? "",
-  ].filter(Boolean);
+  const [checking, setChecking] = useState(false);
 
-  const login = () => {
+  const login = async () => {
     const value = pin.trim();
 
     if (!value) {
@@ -137,13 +137,27 @@ function AdminLogin({
       return;
     }
 
-    if (adminPins.includes(value)) {
-      setMsg("");
-      onSuccess();
-      return;
-    }
+    if (checking) return;
+    setChecking(true);
 
-    setMsg("PIN غير صحيح");
+    try {
+      const { data, error } = await supabase.rpc("admin_login", { p_pin: value });
+
+      if (error) throw error;
+
+      if (data === true) {
+        adminPin = value;
+        setMsg("");
+        onSuccess();
+        return;
+      }
+
+      setMsg("PIN غير صحيح");
+    } catch (error: any) {
+      setMsg(`تعذر التحقق: ${error.message}`);
+    } finally {
+      setChecking(false);
+    }
   };
 
   return (
@@ -373,17 +387,10 @@ function AppointmentsTab() {
     setMsg({ text: "", type: "" });
 
     try {
-      let query = supabase
-        .from("appointments")
-        .select("*");
-
-      if (filterType !== "all") {
-        query = query.eq("appointment_date", effectiveDate);
-      }
-
-      const { data, error } = await query
-        .order("appointment_date", { ascending: false })
-        .order("appointment_time", { ascending: true });
+      const { data, error } = await supabase.rpc("admin_get_appointments", {
+        p_pin: adminPin,
+        p_date: filterType !== "all" ? effectiveDate : null,
+      });
 
       if (error) throw error;
 
@@ -411,36 +418,16 @@ function AppointmentsTab() {
     currentStatus: string
   ) => {
     try {
-      const current = currentStatus.toLowerCase();
-      const next = newStatus.toLowerCase();
-      const isCurrentCancelled = current === "cancelled" || current === "canceled";
-      const isNextActive = next !== "cancelled" && next !== "canceled";
+      // التحقق من تعارض الوقت يتم داخل قاعدة البيانات
+      void appointmentDate;
+      void appointmentTime;
+      void currentStatus;
 
-      if (isCurrentCancelled && isNextActive) {
-        const { data: conflicting, error: conflictError } = await supabase
-          .from("appointments")
-          .select("id,status")
-          .eq("appointment_date", appointmentDate)
-          .eq("appointment_time", appointmentTime)
-          .neq("id", id)
-          .not("status", "in", "(cancelled,canceled)")
-          .maybeSingle();
-
-        if (conflictError) throw conflictError;
-
-        if (conflicting) {
-          setMsg({
-            text: "لا يمكن تفعيل هذا الحجز لأن الوقت محجوز بحجز آخر بالفعل",
-            type: "error",
-          });
-          return;
-        }
-      }
-
-      const { error } = await supabase
-        .from("appointments")
-        .update({ status: newStatus })
-        .eq("id", id);
+      const { error } = await supabase.rpc("admin_set_appointment_status", {
+        p_pin: adminPin,
+        p_id: id,
+        p_status: newStatus,
+      });
 
       if (error) throw error;
 
@@ -468,31 +455,15 @@ function AppointmentsTab() {
     setDeletingId(id);
 
     try {
-      const { count, error: paymentCheckError } = await supabase
-        .from("payments")
-        .select("id", { count: "exact", head: true })
-        .eq("appointment_id", id);
-
-      if (paymentCheckError) throw paymentCheckError;
-
-      if ((count ?? 0) > 0) {
-        setMsg({
-          text: "لا يمكن حذف هذا الحجز لأنه مرتبط بسجل دفع",
-          type: "error",
-        });
-        setDeleteTarget(null);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from("appointments")
-        .delete()
-        .eq("id", id)
-        .select("id");
+      // التحقق من الإلغاء وسجل الدفع يتم داخل قاعدة البيانات
+      const { data, error } = await supabase.rpc("admin_delete_appointment", {
+        p_pin: adminPin,
+        p_id: id,
+      });
 
       if (error) throw error;
 
-      if (!data || data.length === 0) {
+      if (data !== true) {
         setMsg({
           text: "لم يتم حذف الحجز من قاعدة البيانات",
           type: "error",
@@ -947,11 +918,12 @@ function BlockedTimesTab() {
     setSaving(true);
 
     try {
-      const { error } = await supabase.from("blocked_times").insert({
-        date,
-        start_time: `${startTime}:00`,
-        end_time: `${endTime}:00`,
-        reason: reason.trim() ? reason.trim() : null,
+      const { error } = await supabase.rpc("admin_add_blocked_time", {
+        p_pin: adminPin,
+        p_date: date,
+        p_start_time: `${startTime}:00`,
+        p_end_time: `${endTime}:00`,
+        p_reason: reason.trim() ? reason.trim() : null,
       });
 
       if (error) throw error;
@@ -977,7 +949,10 @@ function BlockedTimesTab() {
     if (!ok) return;
 
     try {
-      const { error } = await supabase.from("blocked_times").delete().eq("id", id);
+      const { error } = await supabase.rpc("admin_delete_blocked_time", {
+        p_pin: adminPin,
+        p_id: String(id),
+      });
 
       if (error) throw error;
 
@@ -1167,10 +1142,9 @@ function MessagesTab() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.rpc("admin_get_messages", {
+        p_pin: adminPin,
+      });
 
       if (error) throw error;
 
@@ -1192,10 +1166,11 @@ function MessagesTab() {
 
   const updateMessageStatus = async (id: string, status: "unread" | "read" | "replied") => {
     try {
-      const { error } = await supabase
-        .from("messages")
-        .update({ status })
-        .eq("id", id);
+      const { error } = await supabase.rpc("admin_set_message_status", {
+        p_pin: adminPin,
+        p_id: String(id),
+        p_status: status,
+      });
 
       if (error) throw error;
 
@@ -1446,7 +1421,12 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(false);
 
   return authed ? (
-    <AdminDashboard onLogout={() => setAuthed(false)} />
+    <AdminDashboard
+      onLogout={() => {
+        adminPin = "";
+        setAuthed(false);
+      }}
+    />
   ) : (
     <AdminLogin onSuccess={() => setAuthed(true)} />
   );
