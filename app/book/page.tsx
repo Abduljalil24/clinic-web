@@ -104,10 +104,11 @@ export default function BookPage() {
 
       if (breaksError) throw breaksError;
 
-      const { data: appointmentsRes, error: appointmentsError } = await supabase
-        .from("appointments")
-        .select("*")
-        .eq("appointment_date", selectedDate);
+      // الأوقات المحجوزة فقط — بدون أسماء أو أرقام المرضى
+      const { data: appointmentsRes, error: appointmentsError } = await supabase.rpc(
+        "get_booked_times",
+        { p_date: selectedDate }
+      );
 
       if (appointmentsError) throw appointmentsError;
 
@@ -228,38 +229,25 @@ export default function BookPage() {
     setIsLoading(true);
 
     try {
-      const { data: existing, error: existingError } = await supabase
-        .from("appointments")
-        .select("id,status")
-        .eq("appointment_date", selectedDate)
-        .eq("appointment_time", selectedTime)
-        .maybeSingle();
+      // الحجز يتم عبر دالة في قاعدة البيانات تتحقق من البيانات ومن أن الوقت ما زال متاحًا
+      const { data, error } = await supabase
+        .rpc("create_booking", {
+          p_name: patientName.trim(),
+          p_phone: patientPhone.trim(),
+          p_date: selectedDate,
+          p_time: selectedTime,
+          p_service_id: selectedServiceId ? String(selectedServiceId) : null,
+        })
+        .single();
 
-      if (existingError) throw existingError;
-
-      if (existing) {
-        const status = String(existing.status ?? "").toLowerCase();
-        if (status !== "cancelled" && status !== "canceled") {
+      if (error) {
+        if (error.message?.includes("SLOT_TAKEN")) {
           showMessage("هذا الوقت تم حجزه للتو، اختر وقتًا آخر", "error");
           await loadAvailableTimes();
           return;
         }
+        throw error;
       }
-
-      const { data, error } = await supabase
-        .from("appointments")
-        .insert({
-          patient_name: patientName.trim(),
-          patient_phone: patientPhone.trim(),
-          appointment_date: selectedDate,
-          appointment_time: selectedTime,
-          status: "pending",
-          service_id: selectedServiceId,
-        })
-        .select("booking_number, appointment_date")
-        .single();
-
-      if (error) throw error;
 
       const inserted = data as BookingResult;
       const number = String(inserted.booking_number ?? "");
